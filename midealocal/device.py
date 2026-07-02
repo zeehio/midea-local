@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from enum import IntEnum, StrEnum
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TypedDict, Unpack
 
 from typing_extensions import deprecated
 
@@ -64,39 +64,53 @@ class MessageResult(IntEnum):
     ERROR = 99
 
 
+class MideaDeviceInitKwargs(TypedDict):
+    """Connection/identity kwargs forwarded by device subclasses to MideaDevice.
+
+    Every device subclass's ``__init__`` accepts these via ``**kwargs`` and
+    forwards them unchanged to ``MideaDevice.__init__``. Keeping them in one
+    place means adding a field here (e.g. ``mac``, ``serial_number``) is
+    enough for every subclass to accept and forward it, with no per-subclass
+    signature changes required.
+    """
+
+    name: str
+    device_id: int
+    ip_address: str
+    port: int
+    token: str
+    key: str
+    device_protocol: ProtocolVersion
+    model: str
+    subtype: int
+
+
 class MideaDevice(threading.Thread):
     """Midea device."""
 
     def __init__(
         self,
-        name: str,
-        device_id: int,
+        *,
         device_type: DeviceType,
-        ip_address: str,
-        port: int,
-        token: str,
-        key: str,
-        device_protocol: ProtocolVersion,
-        model: str,
-        subtype: int,
         attributes: dict,
+        **kwargs: Unpack[MideaDeviceInitKwargs],
     ) -> None:
         """Midea device initialization."""
         threading.Thread.__init__(self)
         self._attributes = attributes or {}
         self._socket: socket.socket | None = None
-        self._ip_address = ip_address
-        self._port = port
+        self._ip_address = kwargs["ip_address"]
+        self._port = kwargs["port"]
         self._security = LocalSecurity()
-        self._token = bytes.fromhex(token)
-        self._key = bytes.fromhex(key)
+        self._token = bytes.fromhex(kwargs["token"])
+        self._key = bytes.fromhex(kwargs["key"])
         self._buffer = b""
-        self._device_name = name
-        self._device_id = device_id
+        self._device_name = kwargs["name"]
+        self._device_id = kwargs["device_id"]
         self._device_type = device_type
-        self._device_protocol_version = device_protocol
-        self._model = model
-        self._subtype = subtype
+        self._device_protocol_version = kwargs["device_protocol"]
+        self._model = kwargs["model"]
+        self._subtype = kwargs["subtype"]
         self._message_protocol_version: int = 0
         self._updates: list[Callable[[dict[str, Any]], None]] = []
         self._unsupported_protocol: list[str] = []
