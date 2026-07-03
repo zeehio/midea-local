@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from enum import IntEnum, StrEnum
-from typing import Any, ClassVar, TypedDict, Unpack
+from typing import Any, ClassVar, NotRequired, TypedDict, Unpack
 
 from typing_extensions import deprecated
 
@@ -83,6 +83,7 @@ class MideaDeviceInitKwargs(TypedDict):
     device_protocol: ProtocolVersion
     model: str
     subtype: int
+    mac: NotRequired[str | None]
 
 
 class MideaDevice(threading.Thread):
@@ -123,6 +124,7 @@ class MideaDevice(threading.Thread):
         self._previous_refresh = 0.0
         self._previous_heartbeat = 0.0
         self.name = self._device_name
+        self.set_mac(kwargs.get("mac"))
 
     _fahrenheit_default: ClassVar[bool] = False
 
@@ -197,6 +199,11 @@ class MideaDevice(threading.Thread):
     def subtype(self) -> int:
         """Device subtype."""
         return self._subtype
+
+    @property
+    def mac(self) -> str | None:
+        """Device MAC address."""
+        return self._mac
 
     @staticmethod
     def fetch_v2_message(msg: bytes) -> tuple[list, bytes]:
@@ -647,6 +654,10 @@ class MideaDevice(threading.Thread):
             _LOGGER.debug("[%s] Update IP address to %s", self._device_id, ip_address)
             self._ip_address = ip_address
             self.close_socket()
+
+    def set_mac(self, mac: str | None) -> None:
+        """Set MAC."""
+        self._mac = mac or None
 
     def set_refresh_interval(self, refresh_interval: int) -> None:
         """Set refresh interval."""
