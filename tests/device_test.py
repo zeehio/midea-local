@@ -59,17 +59,25 @@ class TestMideaDevice:
         assert self.device.subtype == 1
 
     @pytest.mark.parametrize(
-        ("exc", "result"),
+        ("exc", "result", "socket_is_none"),
         [
-            (TimeoutError, False),
-            (OSError, False),
-            (AuthException, False),
-            (NoSupportedProtocol, False),
-            (None, True),
+            (TimeoutError, False, True),
+            (OSError, False, True),
+            (AuthException, False, True),
+            (NoSupportedProtocol, False, True),
+            (None, True, False),
         ],
     )
-    def test_connect(self, exc: Exception, result: bool) -> None:
+    def test_connect(
+        self,
+        exc: Exception,
+        result: bool,
+        socket_is_none: bool,
+    ) -> None:
         """Test connect."""
+        # Pre-populate buffer to confirm the failure path runs close_socket(),
+        # which clears it (the old code only nulled _socket).
+        self.device._buffer = b"stale"
         with (
             patch("socket.socket.connect", side_effect=exc),
             patch.object(self.device, "authenticate"),
@@ -77,14 +85,21 @@ class TestMideaDevice:
         ):
             assert self.device.connect(check_protocol=True) is result
             assert self.device.available is result
+            assert (self.device._socket is None) is socket_is_none
+            if socket_is_none:
+                # close_socket() was invoked: it also resets the buffer.
+                assert self.device._buffer == b""
 
     def test_connect_generic_exception(self) -> None:
         """Test connect with generic exception."""
+        self.device._buffer = b"stale"
         with patch("socket.socket.connect") as connect_mock:
             connect_mock.side_effect = Exception()
 
             assert self.device.connect() is False
             assert self.device.available is False
+            assert self.device._socket is None
+            assert self.device._buffer == b""
 
     def test_authenticate(self) -> None:
         """Test authenticate."""
